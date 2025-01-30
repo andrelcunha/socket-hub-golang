@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 
 	"github.com/gorilla/websocket"
 )
@@ -26,7 +28,7 @@ var broadcast = make(chan Message)
 func handleConnections(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Failed to upgrade connection: %v\n", err)
 	}
 
 	defer conn.Close()
@@ -36,7 +38,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		var msg Message
 		err := conn.ReadJSON(&msg)
 		if err != nil {
-			log.Printf("error: %v", err)
+			log.Printf("Error reading JSON: %v\n", err)
 			delete(clients, conn)
 			break
 		}
@@ -50,7 +52,7 @@ func handleMessages() {
 		for client := range clients {
 			err := client.WriteJSON(msg)
 			if err != nil {
-				log.Printf("error: %v", err)
+				log.Printf("Error writing JSON: %v\n", err)
 				client.Close()
 				delete(clients, client)
 			}
@@ -64,9 +66,28 @@ func main() {
 	http.HandleFunc("/ws", handleConnections)
 	go handleMessages()
 
-	log.Println("Server started on :8080")
-	err := http.ListenAndServe(":8080", nil)
-	if err != nil {
-		log.Fatal("ListenAndServe: ", err)
+	addr := os.Getenv("SERVER_ADDR")
+	if addr == "" {
+		addr = ":8080"
 	}
+
+	server := &http.Server{Addr: addr}
+
+	go func() {
+		log.Printf("Server started on %s\n", addr)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("ListenAndServe: %v", err)
+		}
+	}()
+
+	// Graceful shutdown
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+	<-stop
+
+	log.Println("Shutting down server...")
+	if err := server.Close(); err != nil {
+		log.Fatalf("Server close: %v", err)
+	}
+	log.Println("Server gracefully stopped")
 }
