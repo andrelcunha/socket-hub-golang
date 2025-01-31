@@ -13,6 +13,8 @@ FROM alpine:3.14
 
 WORKDIR /app
 COPY --from=builder /app/main /app/main
+COPY --from=builder /app/public /app/public
+
 EXPOSE 8080
 ENV SERVER_ADDR=:8080
 CMD ["./main"]

@@ -61,8 +61,11 @@ func handleMessages() {
 }
 
 func main() {
+	// serving index.html
 	fs := http.FileServer(http.Dir("./public"))
 	http.Handle("/", fs)
+
+	// serving websocket
 	http.HandleFunc("/ws", handleConnections)
 	go handleMessages()
 
